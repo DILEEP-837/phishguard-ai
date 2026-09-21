@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from phishguard.core.domain_intelligence import analyze_hostname
 from phishguard.core.brand_intelligence import analyze_brand_similarity
-
+from phishguard.core.phishing_patterns import detect_phishing_patterns
 
 def calculate_risk(analysis):
     """
@@ -49,6 +49,19 @@ def calculate_risk(analysis):
     score += brand_analysis.get("score", 0)
 
     for indicator in brand_analysis.get("indicators", []):
+        reasons.append(indicator)
+    # =========================================================
+    # 3. PHISHING PATTERN INTELLIGENCE V2.4
+    # =========================================================
+
+    pattern_analysis = detect_phishing_patterns(
+        hostname,
+        parsed.path
+    )
+
+    score += pattern_analysis.get("score", 0)
+
+    for indicator in pattern_analysis.get("indicators", []):
         reasons.append(indicator)
 
     # =========================================================
