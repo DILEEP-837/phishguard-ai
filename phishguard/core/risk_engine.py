@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from phishguard.core.domain_intelligence import analyze_hostname
 from phishguard.core.brand_intelligence import analyze_brand_similarity
 from phishguard.core.phishing_patterns import detect_phishing_patterns
-
+from phishguard.core.obfuscation_intelligence import detect_obfuscation
 def calculate_risk(analysis):
     """
     PHISHGUARD AI Risk Engine V2.3
@@ -38,6 +38,19 @@ def calculate_risk(analysis):
     score += domain_analysis.get("score", 0)
 
     for indicator in domain_analysis.get("indicators", []):
+        reasons.append(indicator)
+    # =========================================================
+    # V2.5 OBFUSCATION INTELLIGENCE
+    # =========================================================
+
+    obfuscation_analysis = detect_obfuscation(
+        url,
+        hostname
+    )
+
+    score += obfuscation_analysis.get("score", 0)
+
+    for indicator in obfuscation_analysis.get("indicators", []):
         reasons.append(indicator)
 
     # =========================================================

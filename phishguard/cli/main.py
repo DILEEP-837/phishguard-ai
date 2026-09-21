@@ -44,7 +44,7 @@ def scan_url(raw_url):
     print("=" * 60)
     print("                 PHISHGUARD AI")
     print("                  URL SCANNER")
-    print("                     V2.3")
+    print("                     V2.5")
     print("=" * 60)
     print()
 
