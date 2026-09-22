@@ -1,26 +1,39 @@
-from difflib import SequenceMatcher
+import re
+from urllib.parse import urlparse
 
-
-# =========================================================
-# KNOWN BRANDS
-# =========================================================
 
 KNOWN_BRANDS = {
-    "google": "google.com",
-    "microsoft": "microsoft.com",
-    "apple": "apple.com",
-    "amazon": "amazon.com",
-    "paypal": "paypal.com",
-    "facebook": "facebook.com",
-    "instagram": "instagram.com",
-    "linkedin": "linkedin.com",
-    "github": "github.com",
+    "google",
+    "microsoft",
+    "apple",
+    "amazon",
+    "facebook",
+    "instagram",
+    "whatsapp",
+    "paypal",
+    "netflix",
+    "linkedin",
+    "twitter",
+    "github",
+    "outlook",
+    "adobe",
+    "dropbox",
 }
 
-
-# =========================================================
-# COMMON HOMOGLYPH / DIGIT SUBSTITUTIONS
-# =========================================================
+SUSPICIOUS_KEYWORDS = {
+    "login",
+    "signin",
+    "verify",
+    "verification",
+    "secure",
+    "security",
+    "account",
+    "update",
+    "confirm",
+    "password",
+    "authenticate",
+    "authentication",
+}
 
 CHARACTER_SUBSTITUTIONS = {
     "0": "o",
@@ -28,196 +41,344 @@ CHARACTER_SUBSTITUTIONS = {
     "3": "e",
     "4": "a",
     "5": "s",
-    "6": "g",
     "7": "t",
     "8": "b",
     "@": "a",
 }
 
 
-def normalize_brand_text(value):
-    """
-    Basic normalization for brand comparison.
-    """
+def extract_hostname(url):
+    if not isinstance(url, str):
+        return None
 
-    return "".join(
-        character.lower()
-        for character in value
-        if character.isalnum()
-    )
+    value = url.strip()
 
+    if not value:
+        return None
 
-def normalize_lookalike_text(value):
-    """
-    Normalize common digit/character substitutions.
+    if any(char.isspace() for char in value):
+        return None
 
-    Examples:
+    try:
+        parsed = urlparse(value)
 
-        g00gle -> google
-        paypa1 -> paypal
-    """
+        if not parsed.netloc:
+            parsed = urlparse("https://" + value)
 
-    value = normalize_brand_text(value)
+        hostname = parsed.hostname
 
-    normalized = []
+        if not hostname:
+            return None
 
-    for character in value:
-        normalized.append(
-            CHARACTER_SUBSTITUTIONS.get(
-                character,
-                character
-            )
-        )
+        return hostname.lower().rstrip(".")
 
-    return "".join(normalized)
+    except ValueError:
+        return None
 
 
-def similarity_score(first, second):
-    """
-    Return similarity between 0 and 1.
-    """
-
-    first_normalized = normalize_brand_text(first)
-    second_normalized = normalize_brand_text(second)
-
-    return SequenceMatcher(
-        None,
-        first_normalized,
-        second_normalized
-    ).ratio()
-
-
-def lookalike_similarity_score(first, second):
-    """
-    Compare strings after common look-alike substitutions
-    have been normalized.
-    """
-
-    first_normalized = normalize_lookalike_text(first)
-    second_normalized = normalize_lookalike_text(second)
-
-    return SequenceMatcher(
-        None,
-        first_normalized,
-        second_normalized
-    ).ratio()
-
-
-def analyze_brand_similarity(hostname):
-    """
-    Detect domains that resemble known brands.
-
-    Returns:
-
-        {
-            "score": int,
-            "indicators": list
-        }
-    """
-
-    hostname = (hostname or "").lower().strip()
-
+def get_registered_domain(hostname):
     if not hostname:
-        return {
-            "score": 0,
-            "indicators": []
-        }
+        return None
 
-    # Remove www.
-    hostname = hostname.removeprefix("www.")
-
-    # Split hostname.
     parts = hostname.split(".")
 
     if len(parts) < 2:
-        return {
-            "score": 0,
-            "indicators": []
-        }
+        return hostname
 
-    # Inspect the registered-looking domain label.
-    domain_label = parts[-2]
+    return ".".join(parts[-2:])
+
+
+def get_domain_labels(hostname):
+    if not hostname:
+        return []
+
+    registered = get_registered_domain(hostname)
+
+    if not registered:
+        return []
+
+    return registered.split(".")[:-1]
+
+
+def normalize_brand_candidate(value):
+    if not value:
+        return ""
+
+    value = value.lower()
+
+    for source, target in CHARACTER_SUBSTITUTIONS.items():
+        value = value.replace(source, target)
+
+    value = re.sub(r"[^a-z0-9]", "", value)
+
+    return value
+
+
+def levenshtein_distance(first, second):
+    if first == second:
+        return 0
+
+    if not first:
+        return len(second)
+
+    if not second:
+        return len(first)
+
+    previous = list(range(len(second) + 1))
+
+    for i, char_first in enumerate(first, start=1):
+        current = [i]
+
+        for j, char_second in enumerate(second, start=1):
+            insert_cost = current[j - 1] + 1
+            delete_cost = previous[j] + 1
+            replace_cost = previous[j - 1] + (
+                char_first != char_second
+            )
+
+            current.append(
+                min(
+                    insert_cost,
+                    delete_cost,
+                    replace_cost,
+                )
+            )
+
+        previous = current
+
+    return previous[-1]
+
+
+def analyze_brand_domain(url):
+    hostname = extract_hostname(url)
+
+    result = {
+        "url": url,
+        "hostname": hostname,
+        "registered_domain": None,
+        "brand_matches": [],
+        "typosquatting_matches": [],
+        "suspicious_keywords": [],
+        "indicators": [],
+        "evidence": [],
+        "risk_score": 0,
+        "risk_level": "SAFE",
+        "classification": "SAFE",
+    }
+
+    if not hostname:
+        result["risk_score"] = 30
+        result["risk_level"] = "MEDIUM"
+        result["classification"] = "SUSPICIOUS"
+        result["indicators"].append(
+            "Unable to determine hostname for brand analysis"
+        )
+        return result
+
+    result["registered_domain"] = get_registered_domain(hostname)
+
+    labels = [
+        label
+        for label in hostname.lower().split(".")
+        if label
+    ]
 
     score = 0
-    indicators = []
 
-    # =========================================================
-    # CHECK AGAINST KNOWN BRANDS
-    # =========================================================
+    for label in labels:
+        # Break labels such as:
+        # google-login
+        # paypal-secure
+        components = [
+            part
+            for part in re.split(r"[-_]+", label)
+            if part
+        ]
 
-    for brand, legitimate_domain in KNOWN_BRANDS.items():
+        for component in components:
+            for brand in sorted(KNOWN_BRANDS):
 
-        # Exact legitimate brand is not suspicious.
-        if domain_label == brand:
-            continue
+                # Exact brand must use the ORIGINAL component.
+                # This prevents g00gle from becoming "google".
+                if component == brand:
+                    if brand not in result["brand_matches"]:
+                        result["brand_matches"].append(brand)
+                    continue
 
-        # -----------------------------------------------------
-        # NORMAL SIMILARITY
-        # -----------------------------------------------------
+                normalized_component = (
+                    normalize_brand_candidate(component)
+                )
+                normalized_brand = (
+                    normalize_brand_candidate(brand)
+                )
 
-        normal_similarity = similarity_score(
-            domain_label,
-            brand
+                # Character substitution:
+                # g00gle -> google
+                # paypa1 -> paypal
+                if (
+                    normalized_component == normalized_brand
+                    and component != brand
+                ):
+                    result["typosquatting_matches"].append(
+                        {
+                            "brand": brand,
+                            "distance": 0,
+                            "label": label,
+                        }
+                    )
+                    continue
+
+                # Small edit-distance typo.
+                distance = levenshtein_distance(
+                    component,
+                    brand,
+                )
+
+                if (
+                    distance <= 1
+                    and len(brand) >= 5
+                ):
+                    result["typosquatting_matches"].append(
+                        {
+                            "brand": brand,
+                            "distance": distance,
+                            "label": label,
+                        }
+                    )
+
+    # Remove duplicate typosquatting matches.
+    unique_matches = []
+    seen = set()
+
+    for match in result["typosquatting_matches"]:
+        key = (
+            match["brand"],
+            match["label"],
         )
 
-        # -----------------------------------------------------
-        # LOOKALIKE SIMILARITY
-        # -----------------------------------------------------
+        if key not in seen:
+            seen.add(key)
+            unique_matches.append(match)
 
-        lookalike_similarity = lookalike_similarity_score(
-            domain_label,
-            brand
+    result["typosquatting_matches"] = unique_matches
+
+    # Authentication / phishing keywords.
+    hostname_lower = hostname.lower()
+
+    for keyword in sorted(SUSPICIOUS_KEYWORDS):
+        if keyword in hostname_lower:
+            result["suspicious_keywords"].append(keyword)
+
+    # Typosquatting evidence.
+    if result["typosquatting_matches"]:
+        score += 35
+
+        for match in result["typosquatting_matches"]:
+            result["indicators"].append(
+                "Possible typosquatting of "
+                + match["brand"]
+            )
+
+    # Exact brand + suspicious keyword.
+    if result["brand_matches"]:
+        if result["suspicious_keywords"]:
+            score += 30
+
+            for brand in result["brand_matches"]:
+                result["indicators"].append(
+                    "Known brand combined with "
+                    "suspicious authentication keywords: "
+                    + brand
+                )
+        else:
+            score += 5
+
+    if result["suspicious_keywords"]:
+        score += min(
+            15,
+            len(result["suspicious_keywords"]) * 5,
         )
 
-        # =====================================================
-        # VERY STRONG LOOKALIKE
-        # =====================================================
+    # Final classification.
+    if (
+        result["typosquatting_matches"]
+        and result["suspicious_keywords"]
+    ):
+        result["classification"] = "PHISHING"
 
-        if lookalike_similarity >= 0.90:
+    elif result["typosquatting_matches"]:
+        result["classification"] = "SUSPICIOUS"
 
-            score += 25
+    elif (
+        result["brand_matches"]
+        and result["suspicious_keywords"]
+    ):
+        result["classification"] = "SUSPICIOUS"
 
-            indicators.append(
-                f"Domain closely resembles known brand: {brand}"
-            )
+    result["risk_score"] = min(100, score)
 
-            break
+    if result["risk_score"] >= 60:
+        result["risk_level"] = "HIGH"
+    elif result["risk_score"] >= 30:
+        result["risk_level"] = "MEDIUM"
+    elif result["risk_score"] > 0:
+        result["risk_level"] = "LOW"
+    else:
+        result["risk_level"] = "SAFE"
 
-        # =====================================================
-        # STRONG LOOKALIKE
-        # =====================================================
+    result["evidence"] = list(result["indicators"])
 
-        elif (
-            normal_similarity >= 0.80
-            or lookalike_similarity >= 0.80
-        ):
+    return result
 
-            score += 20
 
-            indicators.append(
-                f"Domain resembles known brand: {brand}"
-            )
+def analyze_brand_intelligence(url):
+    return analyze_brand_domain(url)
 
-            break
 
-        # =====================================================
-        # MODERATE LOOKALIKE
-        # =====================================================
+# =========================================================
+# BACKWARD COMPATIBILITY
+# =========================================================
 
-        elif (
-            normal_similarity >= 0.70
-            or lookalike_similarity >= 0.70
-        ):
+def analyze_brand_similarity(value):
+    """
+    Backward-compatible interface used by the legacy risk engine.
 
-            score += 15
+    The legacy risk engine passes a hostname, while the new
+    brand intelligence engine accepts either a hostname or URL.
+    """
+    result = analyze_brand_domain(value)
 
-            indicators.append(
-                f"Domain may resemble known brand: {brand}"
-            )
-
-            break
+    score = result.get("risk_score", 0)
 
     return {
-        "score": min(score, 25),
-        "indicators": indicators
+        "score": score,
+        "risk_score": score,
+        "risk_level": result.get(
+            "risk_level",
+            "SAFE",
+        ),
+        "suspicious": (
+            result.get("classification")
+            in {
+                "SUSPICIOUS",
+                "PHISHING",
+            }
+        ),
+        "indicators": result.get(
+            "indicators",
+            [],
+        ),
+        "brand_matches": result.get(
+            "brand_matches",
+            [],
+        ),
+        "typosquatting_matches": result.get(
+            "typosquatting_matches",
+            [],
+        ),
+        "suspicious_keywords": result.get(
+            "suspicious_keywords",
+            [],
+        ),
     }
+

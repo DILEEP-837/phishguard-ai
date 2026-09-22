@@ -26,9 +26,6 @@ from phishguard.core.web_reputation import analyze_infrastructure
 from phishguard.core.relationship_intelligence import analyze_relationships
 from phishguard.core.ip_network_intelligence import analyze_ip_network
 from phishguard.core.threat_correlation import analyze_threat
-from phishguard.core.phishing_intelligence import analyze_phishing
-from phishguard.core.brand_intelligence import analyze_brand_domain
-from phishguard.core.malware_intelligence import analyze_malware_intelligence
 
 
 def scan_url(raw_url):
@@ -218,81 +215,6 @@ def scan_url(raw_url):
             form_destination_analysis,
             javascript_analysis,
         )
-
-    # =========================================================
-    # V3.0 PHASE 9B - PHISHING DETECTION INTELLIGENCE
-    # =========================================================
-
-    # =========================================================
-    # V3.0 PHASE 10 - BRAND & TYPOSQUATTING INTELLIGENCE
-    # =========================================================
-
-    brand_result = analyze_brand_domain(url)
-
-    brand_score = brand_result.get(
-        "risk_score",
-        0,
-    )
-
-    risk_score = min(
-        100,
-        risk_score + brand_score,
-    )
-
-    for indicator in brand_result.get(
-        "indicators",
-        [],
-    ):
-        if indicator not in indicators:
-            indicators.append(indicator)
-
-
-    # =========================================================
-    phishing_content = {
-        "forms": content_result.get("form_count", 0),
-        "login_forms": len(
-            credential_analysis.get("login_forms", [])
-        ),
-        "password_fields": len(
-            credential_analysis.get("password_fields", [])
-        ),
-        "username_fields": len(
-            credential_analysis.get("username_fields", [])
-        ),
-        "email_fields": len(
-            credential_analysis.get("email_fields", [])
-        ),
-        "external_forms": form_destination_analysis.get(
-            "external_form_count",
-            0
-        ),
-        "external_cred_forms": form_destination_analysis.get(
-            "credential_external_count",
-            0
-        ),
-    }
-
-    phishing_result = analyze_phishing(
-        url,
-        phishing_content,
-    )
-
-    phishing_score = phishing_result.get(
-        "risk_score",
-        0
-    )
-
-    risk_score = min(
-        100,
-        risk_score + phishing_score
-    )
-
-    for indicator in phishing_result.get(
-        "indicators",
-        []
-    ):
-        if indicator not in indicators:
-            indicators.append(indicator)
 
     content_score = content_risk.get(
         "total_score",
@@ -1069,46 +991,6 @@ def scan_url(raw_url):
         if indicator not in indicators:
             indicators.append(indicator)
 
-    # =========================================================
-    # V3.0 PHASE 11 - MALWARE & PAYLOAD INTELLIGENCE
-    # =========================================================
-
-    malware_headers = http_response_result.get(
-        "headers",
-        {},
-    )
-
-    malware_content_type = http_response_result.get(
-        "content_type"
-    )
-
-    malware_content_disposition = malware_headers.get(
-        "Content-Disposition"
-    )
-
-    malware_result = analyze_malware_intelligence(
-        url,
-        malware_content_type,
-        malware_content_disposition,
-    )
-
-    malware_score = malware_result.get(
-        "risk_score",
-        0,
-    )
-
-    risk_score = min(
-        100,
-        risk_score + malware_score,
-    )
-
-    for indicator in malware_result.get(
-        "indicators",
-        [],
-    ):
-        if indicator not in indicators:
-            indicators.append(indicator)
-
     # 13D. V3.0 PHASE 4 - HTTP RESPONSE INTELLIGENCE
     print("HTTP RESPONSE INTELLIGENCE")
     print("-" * 55)
@@ -1692,9 +1574,6 @@ def scan_url(raw_url):
         "redirect": redirect_analysis,
         "redirect_chain": redirect_chain,
         "content": content_result,
-        "phishing": phishing_result,
-        "brand": brand_result,
-        "malware": malware_result,
         "dns": dns_result,
         "tls": tls_result,
         "tls_security": tls_security_result,

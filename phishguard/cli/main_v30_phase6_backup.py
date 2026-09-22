@@ -24,11 +24,6 @@ from phishguard.core.http_security import analyze_http_security
 from phishguard.core.http_response_intelligence import analyze_http_response
 from phishguard.core.web_reputation import analyze_infrastructure
 from phishguard.core.relationship_intelligence import analyze_relationships
-from phishguard.core.ip_network_intelligence import analyze_ip_network
-from phishguard.core.threat_correlation import analyze_threat
-from phishguard.core.phishing_intelligence import analyze_phishing
-from phishguard.core.brand_intelligence import analyze_brand_domain
-from phishguard.core.malware_intelligence import analyze_malware_intelligence
 
 
 def scan_url(raw_url):
@@ -218,81 +213,6 @@ def scan_url(raw_url):
             form_destination_analysis,
             javascript_analysis,
         )
-
-    # =========================================================
-    # V3.0 PHASE 9B - PHISHING DETECTION INTELLIGENCE
-    # =========================================================
-
-    # =========================================================
-    # V3.0 PHASE 10 - BRAND & TYPOSQUATTING INTELLIGENCE
-    # =========================================================
-
-    brand_result = analyze_brand_domain(url)
-
-    brand_score = brand_result.get(
-        "risk_score",
-        0,
-    )
-
-    risk_score = min(
-        100,
-        risk_score + brand_score,
-    )
-
-    for indicator in brand_result.get(
-        "indicators",
-        [],
-    ):
-        if indicator not in indicators:
-            indicators.append(indicator)
-
-
-    # =========================================================
-    phishing_content = {
-        "forms": content_result.get("form_count", 0),
-        "login_forms": len(
-            credential_analysis.get("login_forms", [])
-        ),
-        "password_fields": len(
-            credential_analysis.get("password_fields", [])
-        ),
-        "username_fields": len(
-            credential_analysis.get("username_fields", [])
-        ),
-        "email_fields": len(
-            credential_analysis.get("email_fields", [])
-        ),
-        "external_forms": form_destination_analysis.get(
-            "external_form_count",
-            0
-        ),
-        "external_cred_forms": form_destination_analysis.get(
-            "credential_external_count",
-            0
-        ),
-    }
-
-    phishing_result = analyze_phishing(
-        url,
-        phishing_content,
-    )
-
-    phishing_score = phishing_result.get(
-        "risk_score",
-        0
-    )
-
-    risk_score = min(
-        100,
-        risk_score + phishing_score
-    )
-
-    for indicator in phishing_result.get(
-        "indicators",
-        []
-    ):
-        if indicator not in indicators:
-            indicators.append(indicator)
 
     content_score = content_risk.get(
         "total_score",
@@ -896,8 +816,8 @@ def scan_url(raw_url):
         print("  Cipher Suite           : N/A")
 
     version_analysis = tls_security_result.get(
-        "version_analysis"
-    ) or {}
+        "version_analysis", {}
+    )
 
     print(
         f"  TLS Version Risk       : "
@@ -910,8 +830,8 @@ def scan_url(raw_url):
     )
 
     cipher_analysis = tls_security_result.get(
-        "cipher_analysis"
-    ) or {}
+        "cipher_analysis", {}
+    )
 
     print(
         f"  Cipher Risk            : "
@@ -1066,46 +986,6 @@ def scan_url(raw_url):
     risk_score = min(100, risk_score + http_response_score)
 
     for indicator in http_response_result.get("indicators", []):
-        if indicator not in indicators:
-            indicators.append(indicator)
-
-    # =========================================================
-    # V3.0 PHASE 11 - MALWARE & PAYLOAD INTELLIGENCE
-    # =========================================================
-
-    malware_headers = http_response_result.get(
-        "headers",
-        {},
-    )
-
-    malware_content_type = http_response_result.get(
-        "content_type"
-    )
-
-    malware_content_disposition = malware_headers.get(
-        "Content-Disposition"
-    )
-
-    malware_result = analyze_malware_intelligence(
-        url,
-        malware_content_type,
-        malware_content_disposition,
-    )
-
-    malware_score = malware_result.get(
-        "risk_score",
-        0,
-    )
-
-    risk_score = min(
-        100,
-        risk_score + malware_score,
-    )
-
-    for indicator in malware_result.get(
-        "indicators",
-        [],
-    ):
         if indicator not in indicators:
             indicators.append(indicator)
 
@@ -1361,7 +1241,7 @@ def scan_url(raw_url):
     # 6F. V3.0 PHASE 6 - RELATIONSHIP INTELLIGENCE
     relationship_result = analyze_relationships(
         url,
-        redirect_result=redirect_analysis,
+        redirect_result=redirect_result,
         dns_result=dns_result,
         tls_result=tls_result,
     )
@@ -1523,398 +1403,34 @@ def scan_url(raw_url):
 
     print()
 
-    # 6G. V3.0 PHASE 7 - IP & NETWORK INTELLIGENCE
-    ip_network_result = analyze_ip_network(url)
-
-    ip_network_score = ip_network_result.get("risk_score", 0)
-
-    risk_score = min(100, risk_score + ip_network_score)
-
-    for indicator in ip_network_result.get("indicators", []):
-        if indicator not in indicators:
-            indicators.append(indicator)
-
-    # 13G. V3.0 PHASE 7 - IP & NETWORK INTELLIGENCE
-    print("IP & NETWORK INTELLIGENCE")
-    print("-" * 55)
-
-    print(
-        f"  Hostname                : "
-        f"{ip_network_result.get('hostname') or 'N/A'}"
-    )
-
-    print(
-        f"  Direct IP URL           : "
-        f"{'YES' if ip_network_result.get('direct_ip') else 'NO'}"
-    )
-
-    resolution = ip_network_result.get("resolution") or {}
-
-    print()
-    print("  DNS / NETWORK RESOLUTION")
-
-    print(
-        f"    Resolution Successful : "
-        f"{'YES' if resolution.get('success') else 'NO'}"
-    )
-
-    addresses = resolution.get("addresses", [])
-
-    print(
-        f"    Resolved IP Count     : "
-        f"{len(addresses)}"
-    )
-
-    if addresses:
-        print(
-            f"    Resolved IPs          : "
-            f"{', '.join(addresses)}"
-        )
-
-    ipv4_addresses = resolution.get("ipv4_addresses", [])
-    ipv6_addresses = resolution.get("ipv6_addresses", [])
-
-    print(
-        f"    IPv4 Addresses        : "
-        f"{len(ipv4_addresses)}"
-    )
-
-    print(
-        f"    IPv6 Addresses        : "
-        f"{len(ipv6_addresses)}"
-    )
-
-    ip_analysis = ip_network_result.get("ip_analysis") or {}
-
-    print()
-    print("  IP CLASSIFICATION")
-
-    print(
-        f"    Private IPs           : "
-        f"{len(ip_analysis.get('private_addresses', []))}"
-    )
-
-    print(
-        f"    Loopback IPs           : "
-        f"{len(ip_analysis.get('loopback_addresses', []))}"
-    )
-
-    print(
-        f"    Reserved IPs          : "
-        f"{len(ip_analysis.get('reserved_addresses', []))}"
-    )
-
-    print(
-        f"    Link-local IPs        : "
-        f"{len(ip_analysis.get('link_local_addresses', []))}"
-    )
-
-    print(
-        f"    Multicast IPs         : "
-        f"{len(ip_analysis.get('multicast_addresses', []))}"
-    )
-
-    print(
-        f"    Global IPs            : "
-        f"{sum(1 for item in ip_analysis.get('classifications', []) if item.get('global'))}"
-    )
-
-    relationship = ip_network_result.get("relationship") or {}
-
-    print()
-    print("  IP / HOSTNAME RELATIONSHIP")
-
-    print(
-        f"    Direct IP             : "
-        f"{'YES' if relationship.get('direct_ip') else 'NO'}"
-    )
-
-    print(
-        f"    IP Version            : "
-        f"{relationship.get('ip_version') or 'N/A'}"
-    )
-
-    resolved_match = relationship.get("resolved_match")
-
-    print(
-        f"    Resolution Match      : "
-        f"{'YES' if resolved_match is True else 'NO' if resolved_match is False else 'N/A'}"
-    )
-
-    print(
-        f"    Relationship Score    : "
-        f"{relationship.get('risk_score', 0)}"
-    )
-
-    print()
-    print(
-        f"  IP Analysis Score       : "
-        f"{ip_analysis.get('risk_score', 0)}"
-    )
-
-    print(
-        f"  IP Analysis Risk        : "
-        f"{ip_analysis.get('risk_level', 'SAFE')}"
-    )
-
-    if ip_network_result.get("indicators"):
-        print()
-        print("  IP / NETWORK INDICATORS:")
-
-        for indicator in ip_network_result.get("indicators", []):
-            print(f"    - {indicator}")
-
-    print()
-    print(
-        f"  IP & Network Score      : "
-        f"{ip_network_result.get('risk_score', 0)}"
-    )
-
-    print(
-        f"  IP & Network Risk       : "
-        f"{ip_network_result.get('risk_level', 'SAFE')}"
-    )
-
-    if ip_network_result.get("error"):
-        print(
-            f"  IP & Network Error      : "
-            f"{ip_network_result.get('error')}"
-        )
-
-    print()
-
-    # 6H. V3.0 PHASE 8 - THREAT CORRELATION
-    threat_modules = {
-        "url": {
-            **analysis,
-            "indicators": [],
-        },
-        "redirect": redirect_analysis,
-        "redirect_chain": redirect_chain,
-        "content": content_result,
-        "phishing": phishing_result,
-        "brand": brand_result,
-        "malware": malware_result,
-        "dns": dns_result,
-        "tls": tls_result,
-        "tls_security": tls_security_result,
-        "http_security": http_security_result,
-        "http_response": http_response_result,
-        "web_reputation": web_reputation_result,
-        "relationship": relationship_result,
-        "ip_network": ip_network_result,
-    }
-
-    threat_correlation_result = analyze_threat(threat_modules)
-
-    # 13H. V3.0 PHASE 8 - THREAT CORRELATION
-    # =========================================================
-
-    print("[V3.0 PHASE 8 - THREAT CORRELATION]")
-    print()
-
-    print(
-        f"  Classification        : "
-        f"{threat_correlation_result.get('classification', 'UNKNOWN')}"
-    )
-    print(
-        f"  Correlated Risk Score : "
-        f"{threat_correlation_result.get('risk_score', 0)}/100"
-    )
-    print(
-        f"  Security Posture Score: "
-        f"{threat_correlation_result.get('posture_score', 0)}/100"
-    )
-    print(
-        f"  Confidence            : "
-        f"{threat_correlation_result.get('confidence', 0)}/100"
-    )
-    print(
-        f"  Evidence Count        : "
-        f"{threat_correlation_result.get('evidence_count', 0)}"
-    )
-    print(
-        f"  Threat Evidence Count : "
-        f"{threat_correlation_result.get('threat_evidence_count', 0)}"
-    )
-    print(
-        f"  Posture Evidence Count: "
-        f"{threat_correlation_result.get('posture_evidence_count', 0)}"
-    )
-    print(
-        f"  Diagnostic Count      : "
-        f"{threat_correlation_result.get('diagnostic_evidence_count', 0)}"
-    )
-    print(
-        f"  Pattern Count         : "
-        f"{threat_correlation_result.get('pattern_count', 0)}"
-    )
-
-    threat_evidence = threat_correlation_result.get(
-        "threat_evidence",
-        []
-    )
-
-    if threat_evidence:
-        print()
-        print("  THREAT EVIDENCE:")
-        for item in threat_evidence:
-            print(
-                f"    - [{item.get('severity', 'LOW').upper()}] "
-                f"{item.get('indicator', 'Unknown indicator')}"
-            )
-            modules = item.get("modules", [])
-            if modules:
-                print(
-                    f"      Modules: "
-                    f"{', '.join(modules)}"
-                )
-
-    posture_evidence = threat_correlation_result.get(
-        "posture_evidence",
-        []
-    )
-
-    if posture_evidence:
-        print()
-        print("  SECURITY POSTURE:")
-        for item in posture_evidence:
-            print(
-                f"    - {item.get('indicator', 'Unknown observation')}"
-            )
-            modules = item.get("modules", [])
-            if modules:
-                print(
-                    f"      Modules: "
-                    f"{', '.join(modules)}"
-                )
-
-    diagnostic_evidence = threat_correlation_result.get(
-        "diagnostic_evidence",
-        []
-    )
-
-    if diagnostic_evidence:
-        print()
-        print("  DIAGNOSTIC OBSERVATIONS:")
-        for item in diagnostic_evidence:
-            print(
-                f"    - {item.get('indicator', 'Unknown observation')}"
-            )
-            modules = item.get("modules", [])
-            if modules:
-                print(
-                    f"      Modules: "
-                    f"{', '.join(modules)}"
-                )
-
-    patterns = threat_correlation_result.get("patterns", [])
-
-    if patterns:
-        print()
-        print("  DETECTED THREAT PATTERNS:")
-        for pattern in patterns:
-            print(
-                f"    - [{pattern.get('severity', 'LOW').upper()}] "
-                f"{pattern.get('name', 'Unknown pattern')}"
-            )
-            description = pattern.get("description")
-            if description:
-                print(
-                    f"      {description}"
-                )
-
-    print()
-
     # 14. THREAT ASSESSMENT
     # =========================================================
-
-    final_classification = threat_correlation_result.get(
-        "classification",
-        "UNKNOWN"
-    )
-
-    correlated_risk_score = threat_correlation_result.get(
-        "risk_score",
-        0
-    )
-
-    posture_score = threat_correlation_result.get(
-        "posture_score",
-        0
-    )
-
-    confidence = threat_correlation_result.get(
-        "confidence",
-        0
-    )
-
-    threat_evidence_count = threat_correlation_result.get(
-        "threat_evidence_count",
-        0
-    )
 
     print("[THREAT ASSESSMENT]")
     print()
 
     print(
-        f"  Threat Classification : "
-        f"{final_classification}"
-    )
-
-    print(
-        f"  Threat Risk Score     : "
-        f"{correlated_risk_score}/100"
-    )
-
-    print(
-        f"  Security Posture Score: "
-        f"{posture_score}/100"
-    )
-
-    print(
-        f"  Confidence            : "
-        f"{confidence}/100"
-    )
-
-    print(
-        f"  Threat Evidence Count : "
-        f"{threat_evidence_count}"
-    )
-
-    print(
-        f"  Legacy Module Score   : "
+        f"  Risk Score          : "
         f"{risk_score}/100"
     )
 
-    threat_indicators = threat_correlation_result.get(
-        "threat_indicators",
-        []
-    )
-
-    diagnostic_indicators = threat_correlation_result.get(
-        "diagnostic_indicators",
-        []
+    print(
+        f"  Risk Level          : "
+        f"{risk_level}"
     )
 
     print()
 
-    if threat_indicators:
-        print("  Threat Evidence:")
-        for indicator in threat_indicators:
+    if indicators:
+        print("  Indicators:")
+
+        for indicator in indicators:
             print(
                 f"    - {indicator}"
             )
-    else:
-        print("  Threat Evidence             : None")
 
-    if diagnostic_indicators:
-        print(
-            f"  Diagnostic Observations     : "
-            f"{len(diagnostic_indicators)}"
-        )
     else:
-        print("  Diagnostic Observations     : None")
+        print("  Indicators          : None")
 
     print()
 
@@ -1924,18 +1440,17 @@ def scan_url(raw_url):
 
     print("=" * 60)
 
-    if final_classification == "MALICIOUS":
-        print("  RESULT: MALICIOUS THREAT DETECTED")
-    elif final_classification == "SUSPICIOUS":
+    if risk_level in ("CRITICAL", "HIGH"):
+        print("  RESULT: POTENTIAL THREAT DETECTED")
+    elif risk_level == "MEDIUM":
         print("  RESULT: SUSPICIOUS — REVIEW REQUIRED")
-    elif final_classification == "SAFE":
-        print("  RESULT: NO SIGNIFICANT THREATS DETECTED")
+    elif risk_level == "LOW":
+        print("  RESULT: LOW RISK")
     else:
-        print("  RESULT: ANALYSIS INCONCLUSIVE")
+        print("  RESULT: NO SIGNIFICANT THREATS DETECTED")
 
     print("=" * 60)
     print()
-
 
 
 def main():
