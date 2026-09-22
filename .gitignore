@@ -20,3 +20,4 @@ env/
 
 # Environment variables
 .env
+phishguard_ai.egg-info/
