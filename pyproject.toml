@@ -12,6 +12,7 @@ dependencies = [
     "requests",
     "dnspython",
     "tldextract",
+    "beautifulsoup4",
 ]
 
 [project.scripts]
