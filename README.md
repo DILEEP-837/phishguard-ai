@@ -151,3 +151,15 @@ Test status: 354 tests passing
 ## Disclaimer
 
 PhishGuard AI is intended for cybersecurity research, defensive security analysis, education, and authorized testing. Detection results should be treated as security analysis rather than absolute proof of maliciousness.
+
+## Installation
+
+PhishGuard AI is a Python command-line security tool that can be installed directly from GitHub.
+
+### Kali Linux / Debian / Ubuntu
+
+Install the required system tools:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-pip pipx git
